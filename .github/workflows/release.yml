@@ -1,0 +1,51 @@
+name: Build and Release Rooler
+
+on:
+  # 1. Сборка при пуше ЛЮБОГО тега (например: v1.0, 1.0.0 и т.д.)
+  # Так как секция 'branches' отсутствует, пуши в ветки полностью игнорируются
+  push:
+    tags:
+      - '*'
+
+  # 2. Ручной запуск воркфлоу с полем для ввода тега
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Укажите тег для релиза (например, v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release
+        run: |
+          msbuild /m /p:Configuration=Release /p:DebugType=none /p:DebugSymbols=false
+
+      - name: Collect Rooler.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ./dist | Out-Null
+          $exe = Get-ChildItem -Path . -Filter "Rooler.exe" -Recurse | Where-Object { $_.FullName -match "bin\\Release" } | Select-Object -First 1
+          if (-not $exe) { throw "Rooler.exe не найден!" }
+          Copy-Item $exe.FullName -Destination ./dist/Rooler.exe
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Если запущено вручную — берет тег из поля ввода, если пушем тега — берет имя тега
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: Rooler ${{ inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: ./dist/Rooler.exe
