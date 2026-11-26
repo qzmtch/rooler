@@ -30,7 +30,6 @@ jobs:
         working-directory: src
         shell: pwsh
         run: |
-          # Подключаем пакет заголовков .NET Framework на лету
           @"
           <Project>
             <ItemGroup>
@@ -39,8 +38,16 @@ jobs:
           </Project>
           "@ | Set-Content -Path Directory.Build.props
 
-          # Собираем проект (флаг /restore скачает заголовки для нужного таргета)
-          msbuild Rooler.sln /restore /m /p:Configuration=Release /p:DebugType=none /p:DebugSymbols=false /p:OutDir=../dist/
+          # 1. Скачиваем заголовки .NET Framework 4.5.2
+          msbuild Rooler.sln /t:Restore /p:Configuration=Release
+
+          # 2. Находим скачанный корень заголовков и передаем его явно (чтобы увидел и *_wpftmp.csproj)
+          $v452 = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.netframework.referenceassemblies.net452" -Filter "v4.5.2" -Recurse -Directory | Select-Object -First 1
+          if (-not $v452) { throw "ReferenceAssemblies v4.5.2 не найдены!" }
+          $rootPath = $v452.Parent.Parent.FullName + "\"
+
+          # 3. Собираем проект
+          msbuild Rooler.sln /m /p:Configuration=Release /p:DebugType=none /p:DebugSymbols=false /p:OutDir=../dist/ /p:TargetFrameworkRootPath="$rootPath" /p:BypassFrameworkInstallChecks=true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
