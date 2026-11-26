@@ -28,7 +28,19 @@ jobs:
 
       - name: Build Release
         working-directory: src
-        run: msbuild /m /p:Configuration=Release /p:DebugType=none /p:DebugSymbols=false
+        shell: pwsh
+        run: |
+          # Подключаем пакет заголовков .NET Framework на лету
+          @"
+          <Project>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+            </ItemGroup>
+          </Project>
+          "@ | Set-Content -Path Directory.Build.props
+
+          # Собираем проект (флаг /restore скачает заголовки для нужного таргета)
+          msbuild Rooler.sln /restore /m /p:Configuration=Release /p:DebugType=none /p:DebugSymbols=false /p:OutDir=../dist/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -36,4 +48,4 @@ jobs:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: Rooler ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
-          files: src/**/bin/Release/Rooler.exe
+          files: dist/Rooler.exe
